@@ -1526,7 +1526,6 @@ static void vibrator_enable(struct timed_output_dev *dev, int value)
 	}
 	mutex_lock(&aw_haptic->lock);
 	aw_haptic->state = value;
-	aw_haptic->activate_mode = AW_RAM_MODE;
 	mutex_unlock(&aw_haptic->lock);
 	schedule_work(&aw_haptic->vibrator_work);
 }
@@ -1552,7 +1551,6 @@ static void brightness_set(struct led_classdev *cdev, enum led_brightness level)
 	mutex_lock(&aw_haptic->lock);
 	aw_haptic->amplitude = level;
 	aw_haptic->state = level;
-	aw_haptic->activate_mode = AW_RAM_MODE;
 	mutex_unlock(&aw_haptic->lock);
 	schedule_work(&aw_haptic->vibrator_work);
 }
@@ -1639,7 +1637,6 @@ static ssize_t activate_store(struct device *dev, struct device_attribute *attr,
 	}
 	mutex_lock(&aw_haptic->lock);
 	aw_haptic->state = val;
-	aw_haptic->activate_mode = aw_haptic->info.mode;
 	mutex_unlock(&aw_haptic->lock);
 	schedule_work(&aw_haptic->vibrator_work);
 
