@@ -12,6 +12,8 @@
 #include <sound/soc.h>
 #include <sound/pcm_params.h>
 
+#include "haptic_hv_reg.h"
+
 /*********************************************************
  *
  * Haptic_HV CHIPID
