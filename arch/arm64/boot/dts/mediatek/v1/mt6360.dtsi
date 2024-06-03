@@ -55,7 +55,7 @@
 			aicr = <500000>;		/* uA */
 			mivr = <4400000>;		/* uV */
 			cv = <4350000>;			/* uA */
-			ieoc = <400000>;		/* uA ,prize modified by lvyuanchuan,X9-853, 20230116*/
+			ieoc = <250000>;		/* uA ,prize modified by lvyuanchuan,X9-853, 20230116*/
 			safety_timer = <12>;		/* hour */
 			ircmp_resistor = <25000>;	/* uohm */
 			ircmp_vclamp = <32000>;		/* uV */
