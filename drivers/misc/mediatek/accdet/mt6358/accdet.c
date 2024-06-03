@@ -1254,7 +1254,7 @@ EXPORT_SYMBOL_GPL(accdet_val);
 
 int sm_typec_accdet_mic_detect(void){
 
-	mdelay(2);
+	mdelay(15);  //drv hjw  for adc  delay
 	accdet_val = accdet_get_auxadc(0);
 	printk(KERN_INFO"typec_accdet AccdetVolt(%d)\n",accdet_val);
 	endoscope_work_wakeup();

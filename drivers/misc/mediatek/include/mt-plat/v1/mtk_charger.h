@@ -126,4 +126,7 @@ extern bool is_power_path_supported(void);
 extern int charger_get_vbus(void);
 extern bool mt_charger_plugin(void);
 extern int mt_check_cable_in(void);
+/* prize liuyong, add for otg on/off switch control, 20231012, start*/
+bool get_otg_enable_state(void);
+/* prize liuyong, add for otg on/off switch control, 20231012,end */
 #endif /* __MTK_CHARGER_H__ */

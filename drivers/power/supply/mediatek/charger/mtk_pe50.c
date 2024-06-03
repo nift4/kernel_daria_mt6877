@@ -166,6 +166,8 @@ int pe50_run(void)
 					return PE50_ALGO_DONE;
 				}else{
 					pe5->state = PE50_INIT;
+					/*prize add by lvyuanchuan,LAX-294,2024/01/18*/
+					mtk_pe50_stop_algo(pinfo,true);
 					chr_info("[PE50] rerun!!! \n");
 					return PE50_ALGO_RERUN;
 				}

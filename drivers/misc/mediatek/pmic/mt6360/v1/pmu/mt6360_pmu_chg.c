@@ -1922,7 +1922,11 @@ static int mt6360_plug_out(struct charger_device *chg_dev)
 	ret = mt6360_enable_te(chg_dev, false);
 	if (ret < 0)
 		dev_err(mpci->dev, "%s: disable te failed\n", __func__);
-
+	/*prize add by lvyuanchuan,LAX-294,2024/01/29 start*/
+	ret = mt6360_set_ieoc(chg_dev, 250000);
+	if (ret < 0)
+		dev_err(mpci->dev, "%s: set ieoc failed\n", __func__);
+	/*prize add by lvyuanchuan,LAX-294,2024/01/29 end*/
 	return ret;
 }
 

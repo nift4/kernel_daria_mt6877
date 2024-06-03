@@ -104,7 +104,7 @@ extern struct hardware_info current_sarsensor_info;
 #error "SENSOR_DATA_SIZE > SENSOR_IPI_PACKET_SIZE, out of memory"
 #endif
 
-#define SYNC_TIME_CYCLC 10000
+#define SYNC_TIME_CYCLC 5000
 #define SYNC_TIME_START_CYCLC 3000
 
 enum {
@@ -953,8 +953,90 @@ static int mtk_nanohub_enable_rawdata_to_hub(int sensor_id,
 	return err;
 }
 
+/* pri LAX-676 add sync android time to scp  by xiaweigong 20240326 start */
+const char Days[12] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
+
+void rtc_time_to_local_time(uint64_t time,struct sensor_comm_timesync *t)
+{
+	unsigned int Pass4year;
+	int hours_per_year;
+
+	t->host_timestamp = time;
+
+	// /* 北京时间补偿 */
+	// time += 8*60*60;
+
+	if(time < 0)
+	{
+		time = 0;
+	}
+	//取秒时间
+	t->second=(int)(time % 60);
+	time /= 60;
+	//取分钟时间
+	t->minute=(int)(time % 60);
+	time /= 60;
+	//取过去多少个四年，每四年有 1461*24 小时
+	Pass4year=((unsigned int)time / (1461L * 24L));
+	//计算年份
+	t->year=(Pass4year << 2) + 1970;
+	//四年中剩下的小时数
+	time %= 1461L * 24L;
+	//校正闰年影响的年份，计算一年中剩下的小时数
+	for (;;)
+	{
+		//一年的小时数
+		hours_per_year = 365 * 24;
+		//判断闰年
+		if((t->year & 3) == 0)
+		{
+			//是闰年，一年则多24小时，即一天
+			hours_per_year += 24;
+		}
+		if(time < hours_per_year)
+		{
+			break;
+		}
+		t->year++;
+		time -= hours_per_year;
+	}
+	//小时数
+	t->hour=(int)(time % 24);
+	//一年中剩下的天数
+	time /= 24;
+	//假定为闰年
+	time++;
+	//校正闰年的误差，计算月份，日期
+	if((t->year & 3) == 0)
+	{
+		if(time > 60)
+		{
+			time--;
+		}
+		else
+		{
+			if(time == 60)
+			{
+				t->month = 1;
+				t->day = 29;
+				return ;
+			}
+		}
+	}
+	//计算月日
+	for(t->month = 0; Days[t->month] < time; t->month++)
+	{
+		time -= Days[t->month];
+	}
+
+	t->day = (int)(time);
+	return;
+}
+/* pri LAX-676 add sync android time to scp  by xiaweigong 20240326 end */
+
 static int mtk_nanohub_send_timestamp_wake_locked(void)
 {
+#if 0
 	union SCP_SENSOR_HUB_DATA req;
 	int len;
 	int err = 0;
@@ -976,6 +1058,30 @@ static int mtk_nanohub_send_timestamp_wake_locked(void)
 		pr_err("%s fail!\n", __func__);
 		return -1;
 	}
+#else
+	union SCP_SENSOR_HUB_DATA req;
+	int len;
+	int err = 0;
+	struct timespec64 real_time = { 0 };
+	struct sensor_comm_timesync local_time;
+
+	/* send_timestamp_to_hub is process context, disable irq is safe */
+	local_irq_disable();
+	ktime_get_real_ts64(&real_time);
+	local_irq_enable();
+
+	real_time.tv_sec -= (uint64_t)sys_tz.tz_minuteswest * 60;
+	rtc_time_to_local_time(real_time.tv_sec , &local_time); //xwg
+	req.set_config_req.sensorType = 0;
+	req.set_config_req.action = SENSOR_HUB_SET_TIMESTAMP;
+	req.set_config_req.local_time = local_time;  //
+	len = sizeof(req.set_config_req);
+	err = mtk_nanohub_req_send(&req);
+	if (err < 0 || req.rsp.action != SENSOR_HUB_SET_TIMESTAMP) {
+		pr_err("%s fail!\n", __func__);
+		return -1;
+	}
+#endif
 	return err;
 }
 
@@ -988,7 +1094,9 @@ static int mtk_nanohub_send_lcm_brightness_and_rgb(void)
 	int16_t R = 0;
 	int16_t G = 0;
 	int16_t B = 0;
-//	uint8_t retry_times = 0;
+	//drv-del code-pengzhipeng-20231107-start
+	//uint8_t retry_times = 0;
+	//drv-del code-pengzhipeng-20231107-end
 	/* prize modified by gongtaitao for X9-530 start */
 	static int16_t last_R = -1;
 	static int16_t last_G = -1;
@@ -1001,8 +1109,10 @@ static int mtk_nanohub_send_lcm_brightness_and_rgb(void)
 	}
 
 	get_pix_rgb(&R, &G, &B);
+	//drv-del code-pengzhipeng-20231107-start
+	/*
 	if (R == -1 || G == -1 || B == -1) {
-/*		while (retry_times < MAX_RETRY_TIMES) {
+		while (retry_times < MAX_RETRY_TIMES) {
 			mdelay(DELAY_MSECONDS);
 			get_pix_rgb(&R, &G, &B);
 			if (R != -1 && G != -1 && B != -1) {
@@ -1016,12 +1126,9 @@ static int mtk_nanohub_send_lcm_brightness_and_rgb(void)
 			G = 0;
 			B = 0;
 		}
-		*/
-		R = 0;
-		G = 0;
-		B = 0;
 	}
-	
+   */
+   //drv-del code-pengzhipeng-20231107-end
 	req.set_cust_req.sensorType = ID_LIGHT;
 	req.set_cust_req.action = SENSOR_HUB_SET_CUST;
 	req.set_cust_req.setAlsData.action = CUST_ACTION_SET_ALS_PARAM;
@@ -1123,7 +1230,7 @@ int mtk_nanohub_enable_to_hub(uint8_t sensor_id, int enabledisable)
 	send_pixel_data *lcm_param = NULL;
 /* prize modified by gongtaitao for send lcm param to light sensor 20221207 end */
 
-	if (enabledisable == 1 && (READ_ONCE(scp_system_ready)))
+	if (enabledisable == 1 && (atomic_read(&power_status) == SENSOR_POWER_UP))
 		scp_register_feature(SENS_FEATURE_ID);
 	mutex_lock(&sensor_state_mtx);
 	if (sensor_id >= ID_SENSOR_MAX) {

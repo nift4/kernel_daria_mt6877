@@ -2178,6 +2178,16 @@ int sensor_set_cmd_to_hub(uint8_t sensorType,
 			len = offsetof(struct SCP_SENSOR_HUB_SET_CUST_REQ,
 				custData) + sizeof(req.set_cust_req.getInfo);
 			break;
+		/* begin, prize-lifenfen-20181126, add for sensorhub hardware info */
+		#ifdef CONFIG_SENSORHUB_PRIZE_HARDWARE_INFO
+		case CUST_ACTION_GET_PRIZE_HARDWARE_INFO:
+			req.set_cust_req.gethardwareInfo.action =
+				CUST_ACTION_GET_PRIZE_HARDWARE_INFO;
+			len = offsetof(struct SCP_SENSOR_HUB_SET_CUST_REQ, custData)
+				+ sizeof(req.set_cust_req.gethardwareInfo);
+			break;
+		#endif
+		/* end, prize-lifenfen-20181126, add for sensorhub hardware info */
 		default:
 			return -1;
 		}

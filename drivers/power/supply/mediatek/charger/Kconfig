@@ -246,3 +246,12 @@ config CHARGER_MM8013
 	  Say Y to enable
 	  mm8013 driver.
 	  Set to Yes if MM8013 is used.
+
+# drv add by tankaikun, add factory charger class, 20231201 start
+config FACTORY_CHARGE
+	bool "FACTORY CHARGE"
+	help
+	  Say Y to enable
+	  Set to Yes if FACTORY CHARGE is used.
+# drv add by tankaikun, add factory charger class, 20231201 end
+

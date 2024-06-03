@@ -1556,11 +1556,18 @@ static kal_uint32 get_default_framerate_by_scenario(
 
 	return ERROR_NONE;
 }
-
+kal_uint32 ov50a40_dig_gain = 0;
+kal_uint32 ov50a40_expo_gain = 0;
+kal_uint32 ov50a40_blk_lvl_target = 0;
 static kal_uint32 set_test_pattern_mode(kal_uint32 modes,
 	struct SET_SENSOR_PATTERN_SOLID_COLOR *pdata)
 {
-	printk("modes: %d\n", modes);
+	if(modes == 5) {
+		ov50a40_dig_gain = (read_cmos_sensor(0x3510) << 16) | (read_cmos_sensor(0x3511) << 8) | read_cmos_sensor(0x3512);
+		ov50a40_expo_gain = (read_cmos_sensor(0x3508) << 8) | read_cmos_sensor(0x3509);
+		ov50a40_blk_lvl_target = (read_cmos_sensor(0x4019) << 8) | read_cmos_sensor(0x401a);
+	}
+	printk("modes: %d ov50a40_dig_gain:0x%x ov50a40_expo_gain:0x%x ov50a40_blk_lvl_target:0x%x\n", modes,ov50a40_dig_gain,ov50a40_expo_gain,ov50a40_blk_lvl_target);
 	if (modes) {
 		if (modes == 5 && (pdata != NULL)) {
 			write_cmos_sensor(0x3510, 0x00);
@@ -1569,16 +1576,29 @@ static kal_uint32 set_test_pattern_mode(kal_uint32 modes,
 
 			write_cmos_sensor(0x3508, 0x00);
 			write_cmos_sensor(0x3509, 0x00);
-	
-			write_cmos_sensor(0x4019, 0x00);			
+
+			write_cmos_sensor(0x4019, 0x00);
 			write_cmos_sensor(0x401a, 0x00);
 		}
 		else
 			write_cmos_sensor(0x50C1, 0x01);
 	} else {
-		write_cmos_sensor(0x50C1, 0x00);
-		}
+			if(ov50a40_dig_gain !=0 && ov50a40_expo_gain !=0 && ov50a40_blk_lvl_target !=0) {
+				write_cmos_sensor(0x3510, ov50a40_dig_gain >> 16);
+				write_cmos_sensor(0x3511, (ov50a40_dig_gain &0xffff) >>8);
+				write_cmos_sensor(0x3512, ov50a40_dig_gain & 0xff);
 
+				write_cmos_sensor(0x3508, ov50a40_expo_gain >> 8);
+				write_cmos_sensor(0x3509, ov50a40_expo_gain & 0xff);
+
+				write_cmos_sensor(0x4019, ov50a40_blk_lvl_target >> 8);
+				write_cmos_sensor(0x401a, ov50a40_blk_lvl_target & 0xff);
+			}
+			write_cmos_sensor(0x50C1, 0x00);
+		}
+	printk("read  ov50a40_dig_gain 0x%x 0x%x 0x%x \n",read_cmos_sensor(0x3510),read_cmos_sensor(0x3511),read_cmos_sensor(0x3512));
+	printk("read  ov50a40_expo_gain 0x%x 0x%x \n",read_cmos_sensor(0x3508),read_cmos_sensor(0x3509));
+	printk("read  ov50a40_blk_lvl_target 0x%x 0x%x \n",read_cmos_sensor(0x4019),read_cmos_sensor(0x401A));
 	spin_lock(&imgsensor_drv_lock);
 	imgsensor.test_pattern = modes;
 	spin_unlock(&imgsensor_drv_lock);

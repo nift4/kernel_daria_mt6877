@@ -349,6 +349,8 @@ struct charger_manager {
 	bool cmd_discharging;
 	bool safety_timeout;
 	bool vbusov_stat;
+	/* prize liuyong, add otg on/off switch control*/
+	bool otg_enable;
 
 	/* battery warning */
 	unsigned int notify_code;

@@ -1357,17 +1357,23 @@ static void slim_video_setting(void)
 	pr_debug("[%s] slim_video_End\n", __func__);
 }
 
-static kal_uint32 set_test_pattern_mode(kal_bool enable)
+static kal_uint32 set_test_pattern_mode(kal_uint32 modes,
+	struct SET_SENSOR_PATTERN_SOLID_COLOR *pdata)
 {
-	pr_debug("enable: %d\n", enable);
-
-	if (enable)
-		write_cmos_sensor_8bit(0x008c, 0x01);
-	else
+	printk("modes: %d\n", modes);
+	if (modes) {
+		if (modes == 5 && (pdata != NULL)) {
+			write_cmos_sensor_8bit(0x008c, 0x01);
+			write_cmos_sensor_8bit(0x008d, 0x00);
+		}
+		else
+			write_cmos_sensor_8bit(0x50C1, 0x01);
+	} else {
 		write_cmos_sensor_8bit(0x008c, 0x00);
+	}
 
 	spin_lock(&imgsensor_drv_lock);
-	imgsensor.test_pattern = enable;
+	imgsensor.test_pattern = modes;
 	spin_unlock(&imgsensor_drv_lock);
 	return ERROR_NONE;
 }
@@ -2155,8 +2161,9 @@ static kal_uint32 feature_control(MSDK_SENSOR_FEATURE_ENUM feature_id,
 				(MUINT32 *)(uintptr_t)(*(feature_data+1)));
 		break;
 	case SENSOR_FEATURE_SET_TEST_PATTERN:
-		set_test_pattern_mode((BOOL)*feature_data);
-		break;
+		set_test_pattern_mode((UINT32)*feature_data,
+			(struct SET_SENSOR_PATTERN_SOLID_COLOR *)(uintptr_t)(*(feature_data + 1)));
+	break;
 	case SENSOR_FEATURE_GET_TEST_PATTERN_CHECKSUM_VALUE:
 		/* for factory mode auto testing */
 		*feature_return_para_32 = imgsensor_info.checksum_value;

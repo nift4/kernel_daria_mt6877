@@ -1421,7 +1421,7 @@
 
 		/* PD */
 		pd_vbus_low_bound = <5000000>;
-		pd_vbus_upper_bound = <5000000>;
+		pd_vbus_upper_bound = <9000000>;
 		pd_ichg_level_threshold = <1000000>; /* uA */
 		pd_stop_battery_soc = <80>;
 
@@ -2576,7 +2576,7 @@
 						<0 0>;
 
 		vcc-supply = <&mt_pmic_vemc_ldo_reg>;
-		vccq2-supply = <&mt_pmic_vufs_ldo_reg>;
+		vcc-fixed-regulator;
 
 		resets = <&infracfg_rst 0>, <&infracfg_rst 1>,
 				 <&infracfg_rst 2>;
@@ -6930,7 +6930,4 @@
 #ifdef CONFIG_RT_PROP_CHGALGO
 #include "mediatek/pca_pps_ta.dtsi"
 #endif
-&mt_pmic_vemc_ldo_reg {
-	regulator-min-microvolt = <3000000>;
-	regulator-max-microvolt = <3000000>;
-};
+

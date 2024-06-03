@@ -3096,7 +3096,7 @@ static int mtk_power_misc_psy_event(
 			sdc = container_of(
 				nb, struct shutdown_controller, psy_nb);
 			//prize add by tangcong 20220323 start
-			#ifdef CONFIG_PRIZE_BATTERY_HIGTEMP_CTRL
+			#if defined (CONFIG_PRIZE_BATTERY_HIGTEMP_CTRL)||defined (CONFIG_PRIZE_BATTERY_HIGTEMP_CTRL_GQU) 
 			if (gm->cur_bat_temp >= BATTERY_SHUTDOWN_TEMPERATURE || gm->cur_bat_temp <= BATTERY_SHUTDOWN_LOW_TEMPERATURE) {
 			#else
 			if (gm->cur_bat_temp >= BATTERY_SHUTDOWN_TEMPERATURE) {

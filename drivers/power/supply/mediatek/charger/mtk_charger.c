@@ -65,6 +65,10 @@
 /*prize add by lvyuanchuan for limiting the input charging current at screen on, 20221129*/
 #include <linux/fb.h>
 
+/* prize liuyong, add for otg on/off switch control, 20231012, start*/
+#include <tcpm.h>
+/* prize liuyong, add for otg on/off switch control, 20231012, end*/
+
 #include "mtk_charger_intf.h"
 #include "mtk_charger_init.h"
 #include "mtk_pe50.h"
@@ -79,6 +83,7 @@ extern struct hardware_info current_cp_info;
 static struct charger_manager *pinfo;
 static struct list_head consumer_head = LIST_HEAD_INIT(consumer_head);
 static DEFINE_MUTEX(consumer_mutex);
+static DEFINE_MUTEX(pid_lock);
 
 struct tag_bootmode {
 	u32 size;
@@ -3119,6 +3124,58 @@ static int mtk_chg_current_cmd_show(struct seq_file *m, void *data)
 	return 0;
 }
 
+/* prize liuyong, add for otg on/off switch control, 20231012, start*/
+bool get_otg_enable_state(void)
+{
+   return pinfo->otg_enable;
+}
+EXPORT_SYMBOL(get_otg_enable_state);
+
+static ssize_t show_otg_en(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	struct charger_manager *pinfo = dev->driver_data;
+
+	pr_info("[otg] %s : %d\n",__func__, pinfo->otg_enable);
+	return sprintf(buf, "%d\n",pinfo->otg_enable);
+}
+
+static ssize_t store_otg_en(struct device *dev,
+		struct device_attribute *attr, const char *buf, size_t size)
+{
+	struct charger_manager *pinfo = dev->driver_data;
+	unsigned int value = 0;
+	int ret = 0;
+	struct tcpc_device *tcpc;
+
+	tcpc = tcpc_dev_get_by_name("type_c_port0");
+
+	pr_info("[OTG] %s\n", __func__);
+	if (buf != NULL && size != 0) {
+		pr_info("[%s] buf is %s and size is %zu\n",__func__, buf, size);
+		ret = kstrtouint(buf, 16, &value);
+		if (value == 1) {
+			pinfo->otg_enable = true;
+			ret = tcpm_typec_change_role_postpone(tcpc, TYPEC_ROLE_DRP, true);
+		} else if(value == 0) {
+			pinfo->otg_enable = false;
+			charger_dev_enable_otg(pinfo->chg1_dev, false);
+			ret = tcpm_typec_change_role_postpone(tcpc, TYPEC_ROLE_SNK, true);
+		}else{
+			pr_info("[%s] input err, please write 0 or 1\n", __func__);
+		}
+
+		if (!ret)
+			pr_info("%s switch otg mode successful\n", __func__);
+		else
+			pr_info("%s switch otg mode failed\n", __func__);
+	}
+
+	return size;
+}
+static DEVICE_ATTR(otg_en, 0664, show_otg_en, store_otg_en);
+/* prize liuyong, add for otg on/off switch control, 20231012, end*/
+
 /*PRIZE:Modified ,X9-725,20230109 start*/
 static ssize_t show_cmd_charge_disable(struct device *dev,
 		struct device_attribute *attr, char *buf)
@@ -3411,8 +3468,16 @@ static int mtk_charger_setup_files(struct platform_device *pdev)
 	ret = device_create_file(&(pdev->dev), &dev_attr_cmd_charge_disable);
 	if (ret)
 		goto _out;
+	/* prize liuyong, add for otg on/off switch control, 20231012, end*/
+	ret = device_create_file(&(pdev->dev), &dev_attr_charging_scenario);
+	if (ret)
+		goto _out;
 	//prize add by lvyuanchuan for controlling charger --end	
 	ret = device_create_file(&(pdev->dev), &dev_attr_charging_scenario);
+	if (ret)
+		goto _out;
+	//prize add by lvyuanchuan for controlling charger --end	
+	ret = device_create_file(&(pdev->dev), &dev_attr_otg_en);
 	if (ret)
 		goto _out;
 	battery_dir = proc_mkdir("mtk_battery_cmd", NULL);
@@ -3430,6 +3495,90 @@ static int mtk_charger_setup_files(struct platform_device *pdev)
 _out:
 	return ret;
 }
+
+// drv add tankaikun, add factory charger class, 20240126 start
+#if IS_ENABLED(CONFIG_FACTORY_CHARGE)
+static int get_adapter_max_pwr(uint8_t arr[], int n) {
+    int max = arr[0];
+	int i;
+
+    for (i=1; i<n; i++) {
+        if (arr[i] > max) {
+            max = arr[i];
+        }
+    }
+	pr_err("get_adapter_max_pwr max pwr:%d \n", max);
+    return max;
+}
+
+static ssize_t fast_charger_power_show(struct class *class, struct class_attribute *attr,	char *buf)
+{
+	int pwr=10;
+	struct charger_manager *info = pinfo;
+	struct adapter_power_cap cap;
+	int i;
+
+	cap.nr = 0;
+	cap.pdp = 0;
+	for (i = 0; i < ADAPTER_CAP_MAX_NR; i++) {
+		cap.max_mv[i] = 0;
+		cap.min_mv[i] = 0;
+		cap.ma[i] = 0;
+		cap.type[i] = 0;
+		cap.pwr_limit[i] = 0;
+	}
+
+	if (IS_ENABLED(CONFIG_MTK_PUMP_EXPRESS_PLUS_20_SUPPORT)) {
+		/* Is PE+20 connect */
+		if (mtk_pe20_get_is_connect(info))
+			pwr = 18;
+	}
+
+	if (IS_ENABLED(CONFIG_MTK_PUMP_EXPRESS_PLUS_SUPPORT)) {
+		/* Is PE+ connect */
+		if (mtk_pe_get_is_connect(info))
+			pwr = 18;
+	}
+
+	if (mtk_is_TA_support_pd_pps(info) == true) {
+		adapter_dev_get_cap(pinfo->pd_adapter, MTK_PD_APDO, &cap);
+		for (i = 0; i < cap.nr; i++) {
+			cap.pwr_limit[i] = (cap.max_mv[i]/1000) * (cap.ma[i]/ 1000);
+			pr_err("%d: mV:%d,%d mA:%d type:%d pwr_limit:%d pdp:%d\n", i,
+			cap.max_mv[i], cap.min_mv[i], cap.ma[i],
+			cap.type[i], cap.pwr_limit[i], cap.pdp);
+		}
+		pwr = get_adapter_max_pwr(cap.pwr_limit, cap.nr);
+		pwr = min(66,pwr);
+	}
+	return sprintf(buf, "%d\n", pwr);
+}
+
+static struct class * factory_charger_class;
+static struct class_attribute factory_charger_class_attrs[] = {
+	__ATTR(fast_charger_pwr, S_IRUGO,fast_charger_power_show, NULL),
+	__ATTR_NULL,
+};
+
+static int factory_charger_sysfs_create(void)
+{
+	int i = 0,ret = 0;
+	factory_charger_class = class_create(THIS_MODULE, "factory_charger");
+	if (IS_ERR(factory_charger_class))
+		return PTR_ERR(factory_charger_class);
+	for (i = 0; factory_charger_class_attrs[i].attr.name; i++) {
+		ret = class_create_file(factory_charger_class,&factory_charger_class_attrs[i]);
+		if (ret < 0)
+		{
+			pr_err("factory_charger sysfs create error !!\n");
+			return ret;
+		}
+	}
+	return ret;
+}
+
+#endif /* CONFIG_FACTORY_CHARGE */
+// drv add tankaikun, add factory charger class, 20240126 end
 
 void notify_adapter_event(enum adapter_type type, enum adapter_event evt,
 	void *val)
@@ -3605,10 +3754,12 @@ void scd_ctrl_cmd_from_user(void *nl_data, struct sc_nl_msg_t *ret_msg)
 
 	case SC_DAEMON_CMD_SET_DAEMON_PID:
 		{
+			mutex_lock(&pid_lock);
 			memcpy(&pinfo->sc.g_scd_pid, &msg->sc_data[0],
 				sizeof(pinfo->sc.g_scd_pid));
 			chr_err("[fr] SC_DAEMON_CMD_SET_DAEMON_PID = %d(first launch)\n",
 				pinfo->sc.g_scd_pid);
+			mutex_unlock(&pid_lock);
 		}
 	break;
 
@@ -3672,6 +3823,10 @@ static void sc_nl_send_to_user(u32 pid, int seq, struct sc_nl_msg_t *reply_msg)
 	if (!skb)
 		return;
 
+	if(pid == 0){
+		chr_err("[Netlink] pid : %d\n", pid);
+		return;
+	}
 	nlh = nlmsg_put(skb, pid, seq, 0, size, 0);
 	data = NLMSG_DATA(nlh);
 	memcpy(data, reply_msg, size);
@@ -3696,15 +3851,53 @@ static void chg_nl_data_handler(struct sk_buff *skb)
 	struct nlmsghdr *nlh;
 	struct sc_nl_msg_t *sc_msg, *sc_ret_msg;
 	int size = 0;
+	size_t fixed_part_size = offsetof(struct sc_nl_msg_t, sc_data);
+
+	if (skb->len < NLMSG_HDRLEN) {
+		chr_err("Received skb is too small\n");
+		return;
+	}
 
 	nlh = (struct nlmsghdr *)skb->data;
+	if (nlh->nlmsg_len < NLMSG_SPACE(sizeof(struct sc_nl_msg_t))) {
+		chr_err("Netlink message is too short.\n");
+		return;
+	}
+
 	pid = NETLINK_CREDS(skb)->pid;
 	uid = NETLINK_CREDS(skb)->uid;
 	seq = nlh->nlmsg_seq;
 
+
+	if (nlh->nlmsg_len < NLMSG_LENGTH(fixed_part_size)) {
+		chr_err("Netlink message is too short for sc_nl_msg_t header\n");
+		return;
+	}
+
+	if (nlh->nlmsg_len > skb->len) {
+		chr_err("Netlink message length exceeds skb length\n");
+		return;
+	}
+
 	data = NLMSG_DATA(nlh);
 
 	sc_msg = (struct sc_nl_msg_t *)data;
+
+	if (sc_msg->sc_data_len > SCD_NL_MSG_MAX_LEN) {
+		chr_err("sc_data_len exceeds SCD_NL_MSG_MAX_LEN\n");
+		return;
+	}
+
+	if (nlh->nlmsg_len < NLMSG_LENGTH(fixed_part_size + sc_msg->sc_data_len)) {
+		chr_err("Netlink message length is too short for sc_data\n");
+		return;
+	}
+
+	if (sc_msg->sc_ret_data_len > INT_MAX - SCD_NL_MSG_T_HDR_LEN) {
+		chr_err("Failed:sc_ret_data_len=%d maybe exceds INT_MAX\n",
+			sc_msg->sc_ret_data_len);
+		return;
+	}
 
 	size = sc_msg->sc_ret_data_len + SCD_NL_MSG_T_HDR_LEN;
 
@@ -3735,6 +3928,7 @@ static void chg_nl_data_handler(struct sk_buff *skb)
 
 void sc_select_charging_current(struct charger_manager *info, struct charger_data *pdata)
 {
+	mutex_lock(&pid_lock);
 	chr_err("sck: en:%d pid:%d %d %d %d %d %d thermal.dis:%d\n",
 			info->sc.enable,
 			info->sc.g_scd_pid,
@@ -3775,6 +3969,7 @@ void sc_select_charging_current(struct charger_manager *info, struct charger_dat
 		pinfo->sc.disable_in_this_plug == false && info->sc.sc_ibat != -1) {
 		pdata->charging_current_limit = info->sc.sc_ibat;
 	}
+	mutex_unlock(&pid_lock);
 }
 
 void sc_init(struct smartcharging *sc)
@@ -3801,6 +3996,7 @@ void sc_update(struct charger_manager *pinfo)
 	int time = pinfo->sc.left_time_for_cv;
 	int bh = pinfo->sc.bh;
 
+	mutex_lock(&pid_lock);
 	memset(&pinfo->sc.data, 0, sizeof(struct scd_cmd_param_t_1));
 	pinfo->sc.data.data[SC_VBAT] = battery_get_bat_voltage();
 	pinfo->sc.data.data[SC_BAT_TMP] = battery_get_bat_temperature();
@@ -3834,12 +4030,12 @@ void sc_update(struct charger_manager *pinfo)
 		pinfo->sc.data.data[SC_DBGLV] = 3;
 	else
 		pinfo->sc.data.data[SC_DBGLV] = 7;
-
+	mutex_unlock(&pid_lock);
 }
 
 int wakeup_sc_algo_cmd(struct scd_cmd_param_t_1 *data, int subcmd, int para1)
 {
-
+	mutex_lock(&pid_lock);
 	if (pinfo->sc.g_scd_pid != 0) {
 		struct sc_nl_msg_t *sc_msg;
 		int size = SCD_NL_MSG_T_HDR_LEN + sizeof(struct scd_cmd_param_t_1);
@@ -3858,8 +4054,10 @@ int wakeup_sc_algo_cmd(struct scd_cmd_param_t_1 *data, int subcmd, int para1)
 			if (size > PAGE_SIZE)
 				sc_msg = vmalloc(size);
 
-			if (sc_msg == NULL)
+			if (sc_msg == NULL) {
+				mutex_unlock(&pid_lock);
 				return -1;
+			}
 		}
 
 		sc_update(pinfo);
@@ -3877,9 +4075,11 @@ int wakeup_sc_algo_cmd(struct scd_cmd_param_t_1 *data, int subcmd, int para1)
 
 		kvfree(sc_msg);
 
+		mutex_unlock(&pid_lock);
 		return 0;
 	}
 	chr_debug("pid is NULL\n");
+	mutex_unlock(&pid_lock);
 	return -1;
 }
 
@@ -4345,8 +4545,17 @@ static int mtk_charger_probe(struct platform_device *pdev)
 	if (ret)
 		chr_err("[%s] failed to registe %d\n", __func__, ret);
 	/*prize add by lvyuanchuan for limiting the input charging current at screen on, 20221129 end*/			
+
+	// drv add tankaikun, add factory charger class, 20240126 start
+	#if IS_ENABLED(CONFIG_FACTORY_CHARGE)
+	factory_charger_sysfs_create();
+	#endif /* CONFIG_FACTORY_CHARGE */
+	// drv add tankaikun, add factory charger class, 20240126 end
+
 	info->init_done = true;
 	_wake_up_charger(info);
+	/* prize liuyong, add for otg on/off switch control, 20231012*/
+	pinfo->otg_enable = true;
 
 	return 0;
 }

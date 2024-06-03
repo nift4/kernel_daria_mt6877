@@ -236,6 +236,8 @@ void pdc_get_cap_max_watt(void)
 				if (cap->maxwatt[i] > pd->pd_cap_max_watt) {
 					pd->pd_cap_max_watt = cap->maxwatt[i];
 					idx = i;
+					/*prize add by lvyuanchuan,LAX-294,2024/01/18*/
+					cap->selected_cap_idx = idx;
 				}
 				continue;
 			}
@@ -399,8 +401,8 @@ int pdc_init(void)
 			return -ENOMEM;
 
 		pd = pdc;
-
-		pd->data.input_current_limit = 3000000;
+		/*prize add by lvyuanchuan,LAX-294,2024/01/18*/
+		pd->data.input_current_limit = 1600000;
 		pd->data.charging_current_limit = 3000000;
 		pd->data.battery_cv = 4350000;
 
@@ -478,7 +480,23 @@ int pdc_set_cv(void)
 
 	return 0;
 }
+/*prize add by lvyuanchuan,LAX-294,2024/01/18 start*/
+int pdc_input_current_protection(int *vbus , int *cur)
+{
+	int tem_curr = *cur;
+	switch (*vbus) {
+	case 5000:
+		*cur = min(1600 , tem_curr);
+		break;
+	case 9000:
+		*cur = min(1600 , tem_curr);
+		break;
+	}
 
+	chr_err("%s run: vbus: %d, ibus_limit: %d", __func__, vbus, *cur);
+	return 0;
+}
+/*prize add by lvyuanchuan,LAX-294,2024/01/18 end*/
 int pdc_run(void)
 {
 	int ret = 0;
@@ -490,6 +508,8 @@ int pdc_run(void)
 	pdc_set_cv();
 
 	ret = pdc_get_setting(&vbus, &cur, &idx);
+	/*prize add by lvyuanchuan,LAX-294,2024/01/18*/
+	pdc_input_current_protection(&vbus , &cur);
 
 	if (ret != -1 && idx != -1) {
 		pd->pdc_input_current_limit_setting =  cur * 1000;

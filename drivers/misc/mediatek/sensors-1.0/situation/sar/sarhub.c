@@ -12,22 +12,54 @@
 #include <linux/notifier.h>
 #include "include/scp.h"
 #include "sar_factory.h"
-
-//add bob
-int aw_data_debug[3];
-// prize,aw modify end
+/* begin, prize-lifenfen-20181126, add for sensorhub hardware info */
+#include "SCP_power_monitor.h"
+#if defined(CONFIG_PRIZE_HARDWARE_INFO)
+#include "../../../hardware_info/hardware_info.h"
+extern struct hardware_info current_sarsensor_info;
+#endif
+/* end, prize-lifenfen-20181126, add for sensorhub hardware info */
 
 static struct situation_init_info sarhub_init_info;
 static DEFINE_SPINLOCK(calibration_lock);
 struct sarhub_ipi_data {
 	bool factory_enable;
-
+	
 	int32_t cali_data[3];
 	int8_t cali_status;
 	struct completion calibration_done;
+//drv add by situziyin 20231212 start
+#if defined(CONFIG_SENSORHUB_PRIZE_HARDWARE_INFO)
+	atomic_t	scp_init_done;
+	struct work_struct init_done_work;
+#endif
+//drv add by situziyin 20231212 end
 };
 static struct sarhub_ipi_data *obj_ipi_data;
 
+//drv add by situziyin 20231212 start
+#if defined(CONFIG_SENSORHUB_PRIZE_HARDWARE_INFO)
+static int scp_ready_event(uint8_t event, void *ptr)
+{
+	struct sarhub_ipi_data *obj = obj_ipi_data;
+
+	switch (event) {
+	case SENSOR_POWER_UP:
+	    atomic_set(&obj->scp_init_done, 1);
+		schedule_work(&obj->init_done_work);
+		break;
+	case SENSOR_POWER_DOWN:
+	    atomic_set(&obj->scp_init_done, 0);
+		break;
+	}
+	return 0;
+}
+static struct scp_power_monitor scp_ready_notifier = {
+	.name = "sar",
+	.notifier_call = scp_ready_event,
+};
+#endif
+//drv add by situziyin 20231212 end
 
 static int sar_factory_enable_sensor(bool enabledisable,
 					 int64_t sample_periods_ms)
@@ -95,30 +127,19 @@ static int sar_factory_get_cali(int32_t data[3])
 	data[2] = obj->cali_data[2];
 	status = obj->cali_status;
 	spin_unlock(&calibration_lock);
-/* prize,aw modify for sar start */
-//	if (status != 0) {
-//		pr_err("sar cali fail!\n");
-//		return -2;
-//	}
-/* prize,aw modify for sar end */
+	if (status != 0) {
+		pr_debug("sar cali fail!\n");
+		return -2;
+	}
 	return 0;
 }
 
-/* prize,aw modify for sar start */
-static int sar_get_cfg_data(unsigned char *buf, unsigned char count)
-{
-	pr_err("sar sar_get_cfg_data\n");
-
-	return sensor_cfg_to_hub(ID_SAR, buf, count);
-}
-/* prize,aw modify for sar end */
 
 static struct sar_factory_fops sarhub_factory_fops = {
 	.enable_sensor = sar_factory_enable_sensor,
 	.get_data = sar_factory_get_data,
 	.enable_calibration = sar_factory_enable_calibration,
 	.get_cali = sar_factory_get_cali,
-	.get_cfg_data = sar_get_cfg_data,   /* prize,aw modify for sar */
 };
 
 static struct sar_factory_public sarhub_factory_device = {
@@ -180,11 +201,6 @@ static int sar_recv_data(struct data_unit_t *event, void *reserved)
 		value[0] = event->sar_event.data[0];
 		value[1] = event->sar_event.data[1];
 		value[2] = event->sar_event.data[2];
-		//add bob start
-		aw_data_debug[0] =  event->sar_event.data[0];
-		aw_data_debug[1] =  event->sar_event.data[1];
-		aw_data_debug[2] =  event->sar_event.data[2];
-		//add bob end
 		err = sar_data_report_t(value, (int64_t)event->time_stamp);
 	} else if (event->flush_action == CALI_ACTION) {
 		spin_lock(&calibration_lock);
@@ -196,16 +212,44 @@ static int sar_recv_data(struct data_unit_t *event, void *reserved)
 			event->sar_event.z_bias;
 		obj->cali_status =
 			(int8_t)event->sar_event.status;
-/* prize,aw modify for sar start */
-		pr_err("sar cali_data[0]: 0x%08x, cali_data[1]: 0x%08x, cali_data[2]: 0x%08x\n",
-			obj->cali_data[0], obj->cali_data[1], obj->cali_data[2]);
-/* prize,aw modify for sar end */
 		spin_unlock(&calibration_lock);
 		complete(&obj->calibration_done);
 	}
 	return err;
 }
 
+//drv add by situziyin 20231212 start
+#if defined(CONFIG_SENSORHUB_PRIZE_HARDWARE_INFO)
+static void scp_init_work_done(struct work_struct *work)
+{
+	struct sarhub_ipi_data *obj = obj_ipi_data;
+	struct sensor_hardware_info_t deviceinfo;
+	int err = 0;
+	
+	
+	if (atomic_read(&obj->scp_init_done) == 0) {
+		pr_err("scp is not ready to send cmd\n");
+		return;
+	}
+	
+	/* begin, prize-lifenfen-20181126, add for sensorhub hardware info */
+	err = sensorHub_get_hardware_info(ID_SAR, &deviceinfo);
+	if (err < 0)
+		pr_err("sensorHub_get_hardware_info ID_SAR fail\n");
+	else
+	{
+		#if defined(CONFIG_PRIZE_HARDWARE_INFO)
+		strlcpy(current_sarsensor_info.chip, deviceinfo.chip, sizeof(current_sarsensor_info.chip));
+		strlcpy(current_sarsensor_info.vendor, deviceinfo.vendor, sizeof(current_sarsensor_info.vendor));
+		strlcpy(current_sarsensor_info.id, deviceinfo.id, sizeof(current_sarsensor_info.id));
+		strlcpy(current_sarsensor_info.more, deviceinfo.more, sizeof(current_sarsensor_info.more));
+		#endif
+		pr_info("sensorHub_get_hardware_info ID_SAR ok\n");
+	}
+/* end, prize-lifenfen-20181126, add for sensorhub hardware info */
+}
+#endif
+//drv add by situziyin 20231212 end
 
 static int sarhub_local_init(void)
 {
@@ -257,6 +301,14 @@ static int sarhub_local_init(void)
 		pr_err("SCP_sensorHub_data_registration fail!!\n");
 		goto exit;
 	}
+	
+//drv add by situziyin 20231212 start
+#if defined(CONFIG_SENSORHUB_PRIZE_HARDWARE_INFO)
+	INIT_WORK(&obj->init_done_work, scp_init_work_done);
+	scp_power_monitor_register(&scp_ready_notifier);
+#endif
+//drv add by situziyin 20231212 end
+	
 	return 0;
 exit:
 	return -1;

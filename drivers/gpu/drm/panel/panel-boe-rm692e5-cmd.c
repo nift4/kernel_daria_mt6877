@@ -1628,8 +1628,8 @@ static int lcm_get_modes(struct drm_panel *panel)
 
 	
 
-	panel->connector->display_info.width_mm = 64;
-	panel->connector->display_info.height_mm = 129;
+	panel->connector->display_info.width_mm = 70;
+	panel->connector->display_info.height_mm = 157;
 
 	return 3;
 }

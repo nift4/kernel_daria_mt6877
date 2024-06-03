@@ -105,6 +105,6 @@ void blk_execute_rq(struct request_queue *q, struct gendisk *bd_disk,
 	if (hang_check)
 		while (!wait_for_completion_io_timeout(&wait, hang_check * (HZ/2)));
 	else
-		wait_for_completion_io(&wait);
+		wait_for_completion_io_timeout(&wait, 10 * HZ);// drv refer to ALPS08589583,  wait 10s，Or other values,  wait_for_completion_io(&wait);
 }
 EXPORT_SYMBOL(blk_execute_rq);

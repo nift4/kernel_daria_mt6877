@@ -1223,6 +1223,14 @@ static int mtk_ccorr_user_cmd(struct mtk_ddp_comp *comp,
 		int *value = data;
 
 		mtk_ccorr_bypass(comp, *value, handle);
+		if (comp->mtk_crtc->is_dual_pipe) {
+			struct mtk_drm_crtc *mtk_crtc = comp->mtk_crtc;
+			struct drm_crtc *crtc = &mtk_crtc->base;
+			struct mtk_drm_private *priv = crtc->dev->dev_private;
+			struct mtk_ddp_comp *comp_ccorr1 = priv->ddp_comp[DDP_COMPONENT_CCORR1];
+
+			mtk_ccorr_bypass(comp_ccorr1, *value, handle);
+		}
 	}
 	break;
 

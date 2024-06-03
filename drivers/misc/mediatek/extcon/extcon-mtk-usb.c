@@ -22,6 +22,10 @@
 
 #include "extcon-mtk-usb.h"
 
+/* prize liuyong, add for otg on/off switch control, 20231012, start*/
+#include <mt-plat/v1/mtk_charger.h>
+/* prize liuyong, add for otg on/off switch control, 20231012, end*/
+
 #ifdef CONFIG_TCPC_CLASS
 #include "tcpm.h"
 #endif
@@ -99,25 +103,32 @@ static void mtk_usb_extcon_update_role(struct work_struct *work)
 	kfree(role);
 }
 
+// drv mod tankaikun, add debug log, 20240115 start
 static int mtk_usb_extcon_set_role(struct mtk_extcon_info *extcon,
 						unsigned int role)
 {
 	struct usb_role_info *role_info;
+	dev_info(extcon->dev, "mtk_usb_extcon_set_role start\n");
 
 	/* create and prepare worker */
 	role_info = kzalloc(sizeof(*role_info), GFP_KERNEL);
 	if (!role_info)
 		return -ENOMEM;
 
+	dev_info(extcon->dev, "mtk_usb_extcon_set_role init ext update work\n");
 	INIT_DELAYED_WORK(&role_info->dwork, mtk_usb_extcon_update_role);
 
 	role_info->extcon = extcon;
 	role_info->d_role = role;
+
+	dev_info(extcon->dev, "mtk_usb_extcon_set_role queue work\n");
 	/* issue connection work */
 	queue_delayed_work(extcon->extcon_wq, &role_info->dwork, 0);
 
+	dev_info(extcon->dev, "mtk_usb_extcon_set_role end\n");
 	return 0;
 }
+// drv mod tankaikun, add debug log, 20240115 end
 
 #if !defined(CONFIG_USB_MTK_HDRC)
 void mt_usb_connect(void)
@@ -269,7 +280,7 @@ static int mtk_usb_extcon_set_vbus_v1(bool is_on) {
 	}
 #if defined(CONFIG_MTK_GAUGE_VERSION) && (CONFIG_MTK_GAUGE_VERSION == 30)
 	pr_info("%s: is_on=%d\n", __func__, is_on);
-	if (is_on) {
+	if (is_on && (get_otg_enable_state() == true)) {
 		charger_dev_enable_otg(primary_charger, true);
 		charger_dev_set_boost_current_limit(primary_charger,
 			1500000);

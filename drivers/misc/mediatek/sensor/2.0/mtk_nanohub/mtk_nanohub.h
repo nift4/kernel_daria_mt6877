@@ -351,6 +351,18 @@ struct SCP_SENSOR_HUB_BATCH_REQ {
 	/* uint32_t    reserved[7]; */
 };
 
+/* pri LAX-676 add sync android time to scp  by xiaweigong 20240326 start */
+struct sensor_comm_timesync {
+	uint64_t host_timestamp;
+	int32_t second;
+	int32_t minute;
+	int32_t hour;
+	int32_t day;
+	int32_t month;
+	int32_t year;
+} __packed __aligned(4);
+/* pri LAX-676 add sync android time to scp  by xiaweigong 20240326 end */
+
 #define SCP_SENSOR_HUB_BATCH_RSP SCP_SENSOR_HUB_RSP
 /* typedef SCP_SENSOR_HUB_RSP SCP_SENSOR_HUB_BATCH_RSP; */
 
@@ -364,6 +376,10 @@ struct SCP_SENSOR_HUB_SET_CONFIG_REQ {
 	uint64_t ap_timestamp;
 	uint64_t arch_counter;
 	/* uint32_t    reserved[8]; */
+
+	/* pri LAX-676 add sync android time to scp  by xiaweigong 20240326 start */
+	struct sensor_comm_timesync local_time;
+	/* pri LAX-676 add sync android time to scp  by xiaweigong 20240326 end */
 };
 
 #define SCP_SENSOR_HUB_SET_CONFIG_RSP  SCP_SENSOR_HUB_RSP
