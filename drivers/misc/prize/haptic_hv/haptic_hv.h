@@ -88,9 +88,6 @@
 #define AW_INPUT_FRAMEWORK
 /* #define AW_TIKTAP */
  /*#define AW_DOUBLE */
-/*prize add by majiangtao for line vib aw86927 20221122 start*/
-#define AW_DURATION_DECIDE_WAVEFORM
-/*prize add by majiangtao for line vib aw86927 20221122 end*/
 /* #define AW_OSC_MULTI_CALI */
 /* #define AW_BOOT_OSC_CALI */
 /* #define AW_ENABLE_RTP_PRINT_LOG */
