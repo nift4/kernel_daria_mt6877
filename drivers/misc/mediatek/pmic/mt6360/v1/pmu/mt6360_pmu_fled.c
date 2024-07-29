@@ -300,7 +300,7 @@ static int mt6360_fled_parse_dt_data(struct device *dev,
 static struct flashlight_properties mt6360_fled_props = {
 	.type = FLASHLIGHT_TYPE_LED,
 	.torch_brightness = 0,
-	.torch_max_brightness = 21,	/* 00000 ~ 11110 */
+	.torch_max_brightness = 15,	/* 00000 ~ 11110 */
 	.strobe_brightness = 0,
 	/*
 	 * 25 ~ 750mA, step = 6.25mA, 117 steps
