@@ -184,8 +184,10 @@ uvc_send_response(struct uvc_device *uvc, struct uvc_request_data *data)
 	struct usb_composite_dev *cdev = uvc->func.config->cdev;
 	struct usb_request *req = uvc->control_req;
 
-	if (data->length < 0)
+	if (data->length < 0) {
+        pr_err("uvc HALT!!");
 		return usb_ep_set_halt(cdev->gadget->ep0);
+    }
 
 	/*
 	 * For control OUT transfers the request has been enqueued synchronously
@@ -203,6 +205,7 @@ uvc_send_response(struct uvc_device *uvc, struct uvc_request_data *data)
 		req->zero = 0;
 		req->explicit_status = 1;
 
+        pr_err("uvc generate ack %d", data->length);
 		uvc->event_status = 1;
 		return usb_ep_queue(cdev->gadget->ep0, req, GFP_KERNEL);
 	}
@@ -213,6 +216,7 @@ uvc_send_response(struct uvc_device *uvc, struct uvc_request_data *data)
 
 	memcpy(req->buf, data->data, req->length);
 
+        pr_err("uvc reply %d bytes", req->length);
 	return usb_ep_queue(cdev->gadget->ep0, req, GFP_KERNEL);
 }
 
@@ -267,7 +271,7 @@ uvc_v4l2_try_format(struct file *file, void *fh, struct v4l2_format *fmt)
 		return -EINVAL;
 
 	fcc = (u8 *)&fmt->fmt.pix.pixelformat;
-	uvcg_dbg(&uvc->func, "Trying format 0x%08x (%c%c%c%c): %ux%u\n",
+	pr_err("uvc: Trying format 0x%08x (%c%c%c%c): %ux%u\n",
 		fmt->fmt.pix.pixelformat,
 		fcc[0], fcc[1], fcc[2], fcc[3],
 		fmt->fmt.pix.width, fmt->fmt.pix.height);
@@ -301,6 +305,7 @@ uvc_v4l2_set_format(struct file *file, void *fh, struct v4l2_format *fmt)
 	struct uvc_video *video = &uvc->video;
 	int ret;
 
+	pr_err("uvc gadget: SET FORMAT %dx%d", fmt->fmt.pix.width, fmt->fmt.pix.height);
 	ret = uvc_v4l2_try_format(file, fh, fmt);
 	if (ret)
 		return ret;
@@ -466,6 +471,7 @@ uvc_v4l2_streamon(struct file *file, void *fh, enum v4l2_buf_type type)
 	struct uvc_video *video = &uvc->video;
 	int ret;
 
+	pr_err("uvc gadget: STREAM ON");
 	if (type != video->queue.queue.type)
 		return -EINVAL;
 
@@ -492,6 +498,7 @@ uvc_v4l2_streamoff(struct file *file, void *fh, enum v4l2_buf_type type)
 	struct uvc_video *video = &uvc->video;
 	int ret = 0;
 
+	pr_err("uvc gadget: STREAM OFF");
 	if (type != video->queue.queue.type)
 		return -EINVAL;
 
@@ -553,10 +560,12 @@ uvc_v4l2_subscribe_event(struct v4l2_fh *fh,
 		return ret;
 
 	if (sub->type == UVC_EVENT_SETUP) {
+	    pr_err("uvc gadget: subscribed from SETUP !!!");
 		uvc->func_connected = true;
 		handle->is_uvc_app_handle = true;
 		uvc_function_connect(uvc);
 	}
+	pr_err("uvc gadget: subscribed to an event");
 
 	return 0;
 }
@@ -583,9 +592,11 @@ uvc_v4l2_unsubscribe_event(struct v4l2_fh *fh,
 		return ret;
 
 	if (sub->type == UVC_EVENT_SETUP && handle->is_uvc_app_handle) {
+	    pr_err("uvc gadget: unsubscribed from SETUP !!!");
 		uvc_v4l2_disable(uvc);
 		handle->is_uvc_app_handle = false;
 	}
+	pr_err("uvc gadget: unsubscribed to an event");
 
 	return 0;
 }

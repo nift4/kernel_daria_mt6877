@@ -406,6 +406,7 @@ static int mtu3_gadget_ep_set_halt(struct usb_ep *ep, int value)
 	int ret = 0;
 
 	dev_dbg(mtu->dev, "%s : %s...", __func__, ep->name);
+	pr_err("uvc: %s : %s... %s", __func__, ep->name, value ? "set" : "clear");
 
 	spin_lock_irqsave(&mtu->lock, flags);
 
@@ -447,6 +448,7 @@ static int mtu3_gadget_ep_set_wedge(struct usb_ep *ep)
 {
 	struct mtu3_ep *mep = to_mtu3_ep(ep);
 
+	pr_err("uvc: %s : %s...", __func__, ep->name);
 	mep->flags |= MTU3_EP_WEDGE;
 
 	return usb_ep_set_halt(ep);

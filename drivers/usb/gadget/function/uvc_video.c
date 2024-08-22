@@ -254,6 +254,7 @@ static int uvcg_video_ep_queue(struct uvc_video *video, struct usb_request *req)
 	int ret;
 
 	ret = usb_ep_queue(video->ep, req, GFP_ATOMIC);
+    pr_err("uvc: Gave %d req to gadget layer", req->length);
 	if (ret < 0) {
 		uvcg_err(&video->uvc->func, "Failed to queue request (%d).\n",
 			 ret);
@@ -396,12 +397,12 @@ uvc_video_complete(struct usb_ep *ep, struct usb_request *req)
 		break;
 
 	case -EXDEV:
-		uvcg_dbg(&video->uvc->func, "VS request missed xfer.\n");
+		pr_err("uvc: VS request missed xfer.\n");
 		queue->flags |= UVC_QUEUE_DROP_INCOMPLETE;
 		break;
 
 	case -ESHUTDOWN:	/* disconnect from host. */
-		uvcg_dbg(&video->uvc->func, "VS request cancelled.\n");
+		pr_err("uvc: VS request cancelled.\n");
 		uvcg_queue_cancel(queue, 1);
 		break;
 
@@ -469,6 +470,7 @@ uvc_video_complete(struct usb_ep *ep, struct usb_request *req)
 			 * Put request back in req_free for it to be cleaned
 			 * up later.
 			 */
+	        pr_err("uvc gadget: queue2 of request error");
 			list_add_tail(&to_queue->list, &video->req_free);
 		}
 	} else {
@@ -604,12 +606,14 @@ static void uvcg_video_pump(struct work_struct *work)
 			 * further.
 			 */
 			spin_unlock_irqrestore(&queue->irqlock, flags);
+	        pr_err("uvc gadget: buf is null");
 			break;
 		}
 
 		spin_unlock_irqrestore(&queue->irqlock, flags);
 
 		spin_lock_irqsave(&video->req_lock, flags);
+	        pr_err("uvc gadget: queue of request");
 		/* For bulk end points we queue from the worker thread
 		 * since we would preferably not want to wait on requests
 		 * to be ready, in the uvcg_video_complete() handler.
@@ -620,9 +624,11 @@ static void uvcg_video_pump(struct work_struct *work)
 		spin_unlock_irqrestore(&video->req_lock, flags);
 
 		if (ret < 0) {
+	        pr_err("uvc gadget: queue of request error");
 			uvcg_queue_cancel(queue, 0);
 			break;
 		}
+	        pr_err("uvc gadget: queue of request ok");
 
 		/* The request is owned by  the endpoint / ready list. */
 		req = NULL;
@@ -651,6 +657,7 @@ uvcg_video_disable(struct uvc_video *video)
 	struct uvc_buffer *buf, *btemp;
 	struct uvc_request *ureq, *utemp;
 
+	pr_err("uvc gadget: FULL VIDEO DISABLE");
 	if (video->ep == NULL) {
 		uvcg_info(&video->uvc->func,
 			  "Video disable failed, device is uninitialized.\n");
