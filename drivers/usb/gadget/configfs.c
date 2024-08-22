@@ -1302,6 +1302,7 @@ static void purge_configs_funcs(struct gadget_info *gi)
 		list_for_each_entry_safe_reverse(f, tmp, &c->functions, list) {
 
 			list_move(&f->list, &cfg->func_list);
+		pr_err("uvc-composite: unbind function (late) of composite layer");
 			if (f->unbind) {
 				dev_dbg(&gi->cdev.gadget->dev,
 					"unbind function '%s'/%p\n",
@@ -1342,6 +1343,7 @@ static int configfs_composite_bind(struct usb_gadget *gadget,
 	/* and now the gadget bind */
 	ret = -EINVAL;
 
+		pr_err("uvc-composite: bind of composite layer");
 	if (list_empty(&gi->cdev.configs)) {
 		pr_err("Need at least one configuration in %s.\n",
 				gi->composite.name);
@@ -1419,6 +1421,7 @@ static int configfs_composite_bind(struct usb_gadget *gadget,
 			c->descriptors = otg_desc;
 
 		cfg = container_of(c, struct config_usb_cfg, c);
+		pr_err("uvc-composite: bind config of composite layer");
 		if (!list_empty(&cfg->string_list)) {
 			i = 0;
 			list_for_each_entry(cn, &cfg->string_list, list) {
@@ -1438,6 +1441,7 @@ static int configfs_composite_bind(struct usb_gadget *gadget,
 
 		list_for_each_entry_safe(f, tmp, &cfg->func_list, list) {
 			list_del(&f->list);
+		pr_err("uvc-composite: bind function of composite layer");
 			ret = usb_add_function(c, f);
 			if (ret) {
 				list_add(&f->list, &cfg->func_list);
@@ -1570,6 +1574,7 @@ static void configfs_composite_disconnect(struct usb_gadget *gadget)
 	 */
 	acc_disconnect();
 #endif
+		pr_err("uvc-composite: disconnect of composite layer");
 	gi = container_of(cdev, struct gadget_info, cdev);
 	spin_lock_irqsave(&gi->spinlock, flags);
 	cdev = get_gadget_data(gadget);
@@ -1604,6 +1609,7 @@ static void configfs_composite_reset(struct usb_gadget *gadget)
 		return;
 	}
 
+		pr_err("uvc-composite: reset of composite layer");
 	composite_reset(gadget);
 	spin_unlock_irqrestore(&gi->spinlock, flags);
 }
@@ -1615,6 +1621,7 @@ static void configfs_composite_unbind(struct usb_gadget *gadget)
 	unsigned long flags;
 
 	pr_info("%s\n", __func__);
+		pr_err("uvc-composite: unbind of composite layer");
 	/* the gi->lock is hold by the caller */
 
 	cdev = get_gadget_data(gadget);
@@ -1709,6 +1716,7 @@ static int android_setup(struct usb_gadget *gadget,
 
 	list_for_each_entry(fi, &gi->available_func, cfs_list) {
 		if (fi != NULL && fi->f != NULL && fi->f->setup != NULL) {
+			pr_err("uvc-composite: setup of function");
 			value = fi->f->setup(fi->f, c);
 			if (value >= 0)
 				break;
@@ -1716,12 +1724,16 @@ static int android_setup(struct usb_gadget *gadget,
 	}
 
 #ifdef CONFIG_USB_CONFIGFS_F_ACC
-	if (value < 0)
+	if (value < 0) {
+		pr_err("uvc-composite: setup of f_acc");
 		value = acc_ctrlrequest_composite(cdev, c);
+	}
 #endif
 
-	if (value < 0)
+	if (value < 0) {
+		pr_err("uvc-composite: setup of composite layer");
 		value = composite_setup(gadget, c);
+	}
 
 	if (c->bRequest == USB_REQ_SET_CONFIGURATION &&
 						cdev->config) {
@@ -1847,6 +1859,7 @@ static struct config_group *gadgets_make(
 
 	pr_info("%s name=%s\n", __func__, name);
 
+		pr_err("uvc-composite: making a new gadget");
 	gi = kzalloc(sizeof(*gi), GFP_KERNEL);
 	if (!gi)
 		return ERR_PTR(-ENOMEM);

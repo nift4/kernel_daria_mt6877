@@ -208,6 +208,7 @@ uvc_function_ep0_complete(struct usb_ep *ep, struct usb_request *req)
 	struct v4l2_event v4l2_event;
 	struct uvc_event *uvc_event = (void *)&v4l2_event.u.data;
 
+	pr_err("uvc: trace %s\n", __func__);
 	if (uvc->event_status) {
 		uvc->event_status = 0;
 		return;
@@ -222,6 +223,7 @@ uvc_function_ep0_complete(struct usb_ep *ep, struct usb_request *req)
 		 * the ctrl request so the userspace doesn't have to bother with
 		 * offset and configfs parsing
 		 */
+	    pr_err("uvc: trace %s: inside if! %d \n", __func__, le16_to_cpu(mctrl->wIndex));
 		if ((le16_to_cpu(mctrl->wIndex) & 0xff) == uvc->streaming_intf)
 			mctrl->wIndex = cpu_to_le16(UVC_STRING_STREAMING_IDX);
 		else
@@ -234,6 +236,7 @@ uvc_function_ep0_complete(struct usb_ep *ep, struct usb_request *req)
 			sizeof(uvc_event->data.data));
 		memcpy(&uvc_event->data.data, req->buf, uvc_event->data.length);
 		v4l2_event_queue(&uvc->vdev, &v4l2_event);
+	    pr_err("uvc: trace %s: exiting if! %d \n", __func__, uvc_event->data.length);
 	}
 }
 
@@ -242,15 +245,19 @@ uvc_function_setup(struct usb_function *f, const struct usb_ctrlrequest *ctrl)
 {
 	struct uvc_device *uvc = to_uvc(f);
 
+	uvcg_info(f, "trace %s size: %d ; in: %d\n", __func__, le16_to_cpu(ctrl->wLength), ctrl->bRequestType & USB_DIR_IN);
 	if ((ctrl->bRequestType & USB_TYPE_MASK) != USB_TYPE_CLASS) {
 		uvcg_info(f, "invalid request type\n");
 		return -EINVAL;
 	}
 
 	/* Stall too big requests. */
-	if (le16_to_cpu(ctrl->wLength) > UVC_MAX_REQUEST_SIZE)
+	if (le16_to_cpu(ctrl->wLength) > UVC_MAX_REQUEST_SIZE) {
+		uvcg_info(f, "request too big: %d > %d\n", le16_to_cpu(ctrl->wLength), UVC_MAX_REQUEST_SIZE);
 		return -EINVAL;
+    }
 
+	uvcg_info(f, "trace %s: after err checks! size: %d ; in: %d ; if: %d\n", __func__, le16_to_cpu(ctrl->wLength), ctrl->bRequestType & USB_DIR_IN, le16_to_cpu(ctrl->wIndex));
 	/*
 	 * Tell the complete callback to generate an event for the next request
 	 * that will be enqueued by UVCIOC_SEND_RESPONSE.
@@ -288,11 +295,15 @@ uvc_function_setup(struct usb_function *f, const struct usb_ctrlrequest *ctrl)
 		 */
 		mctrl = &uvc_event->req;
 		mctrl->wIndex &= ~cpu_to_le16(0xff);
-		if (interface == uvc->streaming_intf)
+		if (interface == uvc->streaming_intf) {
 			mctrl->wIndex = cpu_to_le16(UVC_STRING_STREAMING_IDX);
+	    uvcg_info(f, "trace %s: gonna send setup ev to INTERFACE(%d=%d) \n", __func__, interface, uvc->streaming_intf);
+        } else
+	        uvcg_info(f, "trace %s: gonna send setup ev to CONTROL(%d!=%d) \n", __func__, interface, uvc->streaming_intf);
 
 		v4l2_event_queue(&uvc->vdev, &v4l2_event);
 	}
+	uvcg_info(f, "trace %s:d one\n", __func__);
 
 	return 0;
 }
@@ -316,9 +327,10 @@ uvc_function_get_alt(struct usb_function *f, unsigned interface)
 
 	if (interface == uvc->control_intf)
 		return 0;
-	else if (interface != uvc->streaming_intf)
+	else if (interface != uvc->streaming_intf) {
+		uvcg_info(f, "get_alt: invalid interface %d, expected %d\n", interface, uvc->streaming_intf);
 		return -EINVAL;
-	else
+	} else
 		return uvc->video.ep->enabled ? 1 : 0;
 }
 
@@ -331,18 +343,22 @@ uvc_function_set_alt(struct usb_function *f, unsigned interface, unsigned alt)
 	struct uvc_event *uvc_event = (void *)&v4l2_event.u.data;
 	int ret;
 
-	uvcg_info(f, "%s(%u, %u)\n", __func__, interface, alt);
+	uvcg_info(f, "%s(%u, %u) while ctrl=%d stream=%d\n", __func__, interface, alt, uvc->control_intf, uvc->streaming_intf);
 
 	if (interface == uvc->control_intf) {
-		if (alt)
+		if (alt) {
+	        uvcg_info(f, "invalid alt for control intf: %u\n", alt);
 			return -EINVAL;
+        }
 
 		uvcg_info(f, "reset UVC Control\n");
 		usb_ep_disable(uvc->control_ep);
 
 		if (!uvc->control_ep->desc)
-			if (config_ep_by_speed(cdev->gadget, f, uvc->control_ep))
+			if (config_ep_by_speed(cdev->gadget, f, uvc->control_ep)) {
+                uvcg_info(f, "config_ep_by_speed failed\n");
 				return -EINVAL;
+            }
 
 		usb_ep_enable(uvc->control_ep);
 
@@ -358,8 +374,10 @@ uvc_function_set_alt(struct usb_function *f, unsigned interface, unsigned alt)
 		return 0;
 	}
 
-	if (interface != uvc->streaming_intf)
+	if (interface != uvc->streaming_intf) {
+        uvcg_info(f, "wrong interface %d, wanted %d or %d\n", interface, uvc->streaming_intf, uvc->control_intf);
 		return -EINVAL;
+    }
 
 	/* TODO
 	if (usb_endpoint_xfer_bulk(&uvc->desc.vs_ep))
@@ -381,8 +399,10 @@ uvc_function_set_alt(struct usb_function *f, unsigned interface, unsigned alt)
 		if (uvc->state != UVC_STATE_CONNECTED)
 			return 0;
 
-		if (!uvc->video.ep)
+		if (!uvc->video.ep) {
+	        uvcg_info(f, "EINVAL %s no ep\n", __func__);
 			return -EINVAL;
+        }
 
 		uvcg_info(f, "reset UVC\n");
 		usb_ep_disable(uvc->video.ep);
@@ -399,6 +419,7 @@ uvc_function_set_alt(struct usb_function *f, unsigned interface, unsigned alt)
 		return USB_GADGET_DELAYED_STATUS;
 
 	default:
+        uvcg_info(f, "wrong alt %d for streaming interface\n", alt);
 		return -EINVAL;
 	}
 }

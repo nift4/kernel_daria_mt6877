@@ -987,20 +987,24 @@ static int set_config(struct usb_composite_dev *cdev,
 			set_bit(addr, f->endpoints);
 		}
 
+        pr_err("uvc enter set_alt in init");
 		result = f->set_alt(f, tmp, 0);
 		if (result < 0) {
+            pr_err("uvc set_alt failed in init %d", result);
 			DBG(cdev, "interface %d (%s/%p) alt 0 --> %d\n",
 					tmp, f->name, f, result);
 
 			reset_config(cdev);
 			goto done;
 		}
+        pr_err("uvc exit set_alt in init %d", result);
 
 		if (result == USB_GADGET_DELAYED_STATUS) {
 			DBG(cdev,
 			 "%s: interface %d (%s) requested delayed status\n",
 					__func__, tmp, f->name);
 			cdev->delayed_status++;
+            pr_err("uvc INIT delayed_status++, now is %d", cdev->delayed_status);
 			DBG(cdev, "delayed_status count %d\n",
 					cdev->delayed_status);
 		}
@@ -1917,12 +1921,15 @@ composite_setup(struct usb_gadget *gadget, const struct usb_ctrlrequest *ctrl)
 			break;
 
 		spin_lock(&cdev->lock);
+        pr_err("uvc enter set_alt");
 		value = f->set_alt(f, w_index, w_value);
+        pr_err("uvc exit set_alt: %d", value);
 		if (value == USB_GADGET_DELAYED_STATUS) {
 			DBG(cdev,
 			 "%s: interface %d (%s) requested delayed status\n",
 					__func__, intf, f->name);
 			cdev->delayed_status++;
+            pr_err("uvc delayed_status++, now is %d", cdev->delayed_status);
 			DBG(cdev, "delayed_status count %d\n",
 					cdev->delayed_status);
 		}
@@ -2156,6 +2163,7 @@ try_fun_setup:
 				value = f->setup(f, ctrl);
 		}
 
+        pr_err("uvc composite! skip delay stuff, fun setup handled it");
 		goto done;
 	}
 
@@ -2170,6 +2178,7 @@ check_value:
 			__func__, ctrl->bRequest);
 	}
 	if (value >= 0 && value != USB_GADGET_DELAYED_STATUS) {
+        pr_err("uvc composite! NOT delayed status");
 		req->length = value;
 		req->context = cdev;
 		req->zero = value < w_length;
@@ -2183,10 +2192,13 @@ check_value:
 		WARN(cdev,
 			"%s: Delayed status not supported for w_length != 0",
 			__func__);
-	}
+	} else if (value >= 0) {
+        pr_err("uvc composite! delayed status :)");
+    }
 
 done:
 	if (value < 0) {
+        pr_err("uvc composite! setup is ERROR");
 		if (__ratelimit(&ratelimit)) {
 			INFO(cdev, "[rlimit]val:%d,bReqType:%x,bReq:%x\n",
 					value,
@@ -2652,6 +2664,7 @@ void usb_composite_setup_continue(struct usb_composite_dev *cdev)
 	DBG(cdev, "%s\n", __func__);
 	spin_lock_irqsave(&cdev->lock, flags);
 
+    pr_err("uvc continue() delayed_status is %d", cdev->delayed_status);
 	if (cdev->delayed_status == 0) {
 		WARN(cdev, "%s: Unexpected call\n", __func__);
 
@@ -2666,6 +2679,7 @@ void usb_composite_setup_continue(struct usb_composite_dev *cdev)
 			composite_setup_complete(cdev->gadget->ep0, req);
 		}
 	}
+        pr_err("uvc continue() done, delayed_status is %d", cdev->delayed_status);
 
 	spin_unlock_irqrestore(&cdev->lock, flags);
 }

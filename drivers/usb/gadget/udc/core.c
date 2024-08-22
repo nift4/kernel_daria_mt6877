@@ -1021,7 +1021,7 @@ void usb_gadget_control_complete(struct usb_gadget *gadget,
 		struct usb_request *request)
 {
 	struct usb_request *req;
-
+    pr_err("uvc: maybe gonna ack? unless (%d || %d || !%d)", request->explicit_status, request->status, request->length);
 	if (request->explicit_status || request->status || !request->length)
 		return;
 

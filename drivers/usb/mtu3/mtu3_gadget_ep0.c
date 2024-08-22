@@ -144,6 +144,7 @@ static void ep0_stall_set(struct mtu3_ep *mep0, bool set, u32 pktrdy)
 	void __iomem *mbase = mtu->mac_base;
 	u32 csr;
 
+	pr_err("uvc: %s : %s... %s", __func__, mep0->name, set ? "set" : "clear");
 	/* EP0_SENTSTALL is W1C */
 	csr = mtu3_readl(mbase, U3D_EP0CSR) & EP0_W1C_BITS;
 	if (set)
@@ -162,6 +163,7 @@ static void ep0_do_status_stage(struct mtu3 *mtu)
 {
 	void __iomem *mbase = mtu->mac_base;
 	u32 value;
+        pr_err("uvc DELAYED STATUS over over over");
 
 	value = mtu3_readl(mbase, U3D_EP0CSR) & EP0_W1C_BITS;
 	mtu3_writel(mbase, U3D_EP0CSR, value | EP0_SETUPPKTRDY | EP0_DATAEND);
@@ -422,6 +424,7 @@ static int ep0_handle_feature(struct mtu3 *mtu,
 			break;
 
 		handled = 1;
+	    pr_err("uvc: %s : stall/unstall %d wedge:%d", __func__, set, mep->flags & MTU3_EP_WEDGE);
 		/* ignore request if endpoint is wedged */
 		if (mep->flags & MTU3_EP_WEDGE)
 			break;
@@ -527,6 +530,7 @@ static int ep0_send_ack(struct mtu3 *mtu)
 	void __iomem *mbase = mtu->mac_base;
 	u32 csr = mtu3_readl(mbase, U3D_EP0CSR) & EP0_W1C_BITS;
 
+	pr_err("uvc: %s : GONNA SEND ACK", __func__);
 	if (mtu->ep0_state == MU3D_EP0_STATE_RX_END)
 		csr |= EP0_DATAEND | EP0_RXPKTRDY;
 	else if (mtu->ep0_state == MU3D_EP0_STATE_TX_ENDED)
@@ -538,6 +542,7 @@ static int ep0_send_ack(struct mtu3 *mtu)
 
 	mtu->ep0_state = MU3D_EP0_STATE_SETUP;
 
+	pr_err("uvc: %s : **SENT ACK**", __func__);
 	return 0;
 }
 
@@ -577,12 +582,14 @@ static void ep0_rx_state(struct mtu3 *mtu)
 			mtu->ep0_state = MU3D_EP0_STATE_RX_END;
 			dev_dbg(mtu->dev, "ep0 state: %s\n",
 				decode_ep0_state(mtu));
+	        pr_err("uvc: %s : RX WAIT FOR ACK", __func__);
 		} else {
 			req = NULL;
 		}
 	} else {
 		csr |= EP0_RXPKTRDY | EP0_SENDSTALL;
 		dev_dbg(mtu->dev, "%s: SENDSTALL\n", __func__);
+	    pr_err("uvc: %s : stall", __func__);
 	}
 
 	/* give back the request if have received all data */
@@ -657,6 +664,7 @@ static void ep0_read_setup(struct mtu3 *mtu, struct usb_ctrlrequest *setup)
 
 	if (le16_to_cpu(setup->wLength) == 0) { /* no data stage */
 		mtu->ep0_state = MU3D_EP0_STATE_DELAYING;
+        pr_err("uvc: **delaying setup**");
 	} else if (setup->bRequestType & USB_DIR_IN) {
 		mtu3_writel(mtu->mac_base, U3D_EP0CSR,
 			csr | EP0_SETUPPKTRDY | EP0_DPHTX);
@@ -676,6 +684,7 @@ __acquires(mtu->lock)
 	struct mtu3_request *mreq;
 	int handled = 0;
 
+        pr_err("uvc: new setup packet");
 	memset(&setup, 0, sizeof(setup));
 	ep0_read_setup(mtu, &setup);
 	trace_mtu3_handle_setup(&setup);
@@ -709,9 +718,14 @@ finish:
 
 		mreq = next_ep0_request(mtu);
 		if (mreq) {
+            pr_err("uvc DELAYED STATUS _+-+-_");
+		    if (mreq->request.length)
+                WARN_ON(1);
 			/* already asked us to continue delayed status */
 			ep0_do_status_stage(mtu);
 			ep0_req_giveback(mtu, &mreq->request);
+		} else {
+            pr_err("uvc DELAYED STATUS ______");
 		}
 		/* otherwise do delayed STATUS stage till receive ep0_queue */
 	}
@@ -737,8 +751,10 @@ irqreturn_t mtu3_ep0_isr(struct mtu3 *mtu)
 		return IRQ_NONE;
 
 	/* abort current SETUP, and process new one */
-	if (int_status & SETUPENDISR)
+	if (int_status & SETUPENDISR) {
 		mtu->ep0_state = MU3D_EP0_STATE_SETUP;
+	    pr_err("uvc: %s : stop processing setup, new setup came in !!!", __func__);
+    }
 
 	csr = mtu3_readl(mbase, U3D_EP0CSR);
 
@@ -746,6 +762,7 @@ irqreturn_t mtu3_ep0_isr(struct mtu3 *mtu)
 
 	/* we sent a stall.. need to clear it now.. */
 	if (csr & EP0_SENTSTALL) {
+	    pr_err("uvc: %s : stall clear", __func__);
 		ep0_stall_set(mtu->ep0, false, 0);
 		csr = mtu3_readl(mbase, U3D_EP0CSR);
 		ret = IRQ_HANDLED;
@@ -770,6 +787,7 @@ irqreturn_t mtu3_ep0_isr(struct mtu3 *mtu)
 		break;
 	case MU3D_EP0_STATE_TX_END:
 		mtu->ep0_state = MU3D_EP0_STATE_TX_ENDED;
+	    pr_err("uvc: %s : TX WAIT FOR ACK", __func__);
 		mreq = next_ep0_request(mtu);
 		if (mreq)
 			ep0_req_giveback(mtu, &mreq->request);
@@ -854,6 +872,7 @@ static int ep0_queue(struct mtu3_ep *mep, struct mtu3_request *mreq)
 	/* status stage of OUT with data, issue IN status, then giveback */
 	else if (mtu->ep0_state == MU3D_EP0_STATE_RX_END
 		|| mtu->ep0_state == MU3D_EP0_STATE_TX_ENDED) {
+	    pr_err("uvc: %s : WANT TO SEND ACK", __func__);
 		int status;
 		if (mreq->request.length)
 			status = -EINVAL;
@@ -928,6 +947,7 @@ static int mtu3_ep0_halt(struct usb_ep *ep, int value)
 		goto cleanup;
 	}
 
+	pr_err("uvc: %s : stall", __func__);
 	switch (mtu->ep0_state) {
 	/*
 	 * stalls are usually issued after parsing SETUP packet, either

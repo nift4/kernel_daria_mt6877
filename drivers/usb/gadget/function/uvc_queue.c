@@ -253,6 +253,7 @@ void uvcg_queue_cancel(struct uvc_video_queue *queue, int disconnect)
 	struct uvc_buffer *buf;
 	unsigned long flags;
 
+	pr_err("uvc gadget: CANCEL QUEUE disconnect=%d", disconnect);
 	spin_lock_irqsave(&queue->irqlock, flags);
 	while (!list_empty(&queue->irqqueue)) {
 		buf = list_first_entry(&queue->irqqueue, struct uvc_buffer,
@@ -297,6 +298,7 @@ int uvcg_queue_enable(struct uvc_video_queue *queue, int enable)
 	unsigned long flags;
 	int ret = 0;
 
+	pr_err("uvc gadget: QUEUE STATUS enable=%d", enable);
 	if (enable) {
 		ret = vb2_streamon(&queue->queue, queue->queue.type);
 		if (ret < 0)
@@ -335,9 +337,11 @@ void uvcg_complete_buffer(struct uvc_video_queue *queue,
 		buf->state = UVC_BUF_STATE_ERROR;
 		vb2_set_plane_payload(&buf->buf.vb2_buf, 0, 0);
 		vb2_buffer_done(&buf->buf.vb2_buf, VB2_BUF_STATE_ERROR);
+	    pr_err("uvc gadget: complete buffer. DROP INCOMPLETE!!!");
 		return;
 	}
 
+	pr_err("uvc gadget: complete buffer");
 	buf->buf.field = V4L2_FIELD_NONE;
 	buf->buf.sequence = queue->sequence++;
 	buf->buf.vb2_buf.timestamp = ktime_get_ns();
