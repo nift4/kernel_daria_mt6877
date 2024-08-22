@@ -299,6 +299,7 @@ void mtu3_ep_stall_set(struct mtu3_ep *mep, bool set)
 	u8 epnum = mep->epnum;
 	u32 csr;
 
+	pr_err("uvc: %s : %s... %s", __func__, mep->name, set ? "set" : "clear");
 	if (mep->is_in) {	/* TX */
 		csr = mtu3_readl(mbase, MU3D_EP_TXCR0(epnum)) & TX_W1C_BITS;
 		if (set)
