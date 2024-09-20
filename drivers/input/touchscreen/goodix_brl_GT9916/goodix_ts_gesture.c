@@ -268,6 +268,9 @@ static int gsx_gesture_init(struct goodix_ts_core *cd,
 	return 0;
 }
 
+/*prize add by xuejian for gesture start*/
+extern void prize_common_node_register(char* name,void(*set)(unsigned char on_off));
+
 static int gsx_gesture_exit(struct goodix_ts_core *cd,
 		struct goodix_ext_module *module)
 {
@@ -280,6 +283,24 @@ static int gsx_gesture_exit(struct goodix_ts_core *cd,
 
 	atomic_set(&gsx->registered, 0);
 	return 0;
+}
+
+/*prize add by xuejian for gesture end*/
+static void goodix_finger_screenstate_func(unsigned char on) {
+    switch (on) {
+        case 1:
+            g_ts_core->hw_ops->receive_cmd(g_ts_core, 0x17, 1); // usb_left
+            printk("%s ROTATION_90\n", __func__);
+            break;
+        case 3:
+            g_ts_core->hw_ops->receive_cmd(g_ts_core, 0x17, 3); // usb_right
+            printk("%s ROTATION_270\n", __func__);
+            break;
+        default:
+            g_ts_core->hw_ops->receive_cmd(g_ts_core, 0x17, 0); // usb_normal
+            printk("%s ROTATION_0\n", __func__);
+            break;
+    }
 }
 
 /**
@@ -452,6 +473,10 @@ int gesture_module_init(void)
 
 	module_initialized = true;
 	goodix_register_ext_module_no_wait(&gsx_gesture->module);
+
+/*prize add by xuejian for gesture start*/
+	prize_common_node_register("SCREENSTATE", &goodix_finger_screenstate_func);
+/*prize add by xuejian for gesture end*/
 
 	ts_info("gesture module init success");
 

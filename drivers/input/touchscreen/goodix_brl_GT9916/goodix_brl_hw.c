@@ -325,15 +325,15 @@ int brl_receive_cmd(struct goodix_ts_core *cd, u8 rcv_cmd, u8 onoff)
 		case GOODIX_SCREENSTATE:
 			cmd.cmd = GOODIX_SCREENSTATE;
 			cmd.len = 5;
-			if (onoff == 1) {   //zuo
-				cmd.data[0] = 0x01;
-				cmd.data[1] = 0x1D;
-				cmd.data[2] = 0x00;
-			} else if (onoff == 2) {    //you
+			if (onoff == 1) { // ROTATION_90
 				cmd.data[0] = 0x02;
 				cmd.data[1] = 0x1E;
 				cmd.data[2] = 0x00;
-			} else {    //竖屏
+			} else if (onoff == 3) { // ROTATION_270
+				cmd.data[0] = 0x01;
+				cmd.data[1] = 0x1D;
+				cmd.data[2] = 0x00;
+			} else { // ROTATION_0
 				cmd.data[0] = 0x00;
 				cmd.data[1] = 0x1C;
 				cmd.data[2] = 0x00;
